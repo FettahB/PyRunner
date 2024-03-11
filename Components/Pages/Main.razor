@@ -1,0 +1,104 @@
+﻿@page "/"
+@using System.IO;
+@using System.Text.Json;
+@using System.Threading.Tasks;
+@using Microsoft.AspNetCore.Components.Forms
+@rendermode InteractiveServer
+
+<h3>Main</h3>
+
+<InputFile OnChange="UploadFile" />
+
+@if (programs.Count > 0)
+{
+    <ul>
+        @foreach (var program in programs)
+        {
+            <li>
+                @program.Name - @program.Description
+                <button class="btn btn-danger btn-sm" @onclick="() => RemoveProgram(program)">Delete</button>
+            </li>
+        }
+    </ul>
+}
+else
+{
+    <p>No programs added yet.</p>
+}
+
+@code {
+    List<Program> programs = new List<Program>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        programs = await LoadProgramsFromFile();
+    }
+
+    async Task<List<Program>> LoadProgramsFromFile()
+    {
+        List<Program> result = null;
+        var appDataFolder = Path.Combine(Directory.GetCurrentDirectory(), "App_Data");
+        var filePath = Path.Combine(appDataFolder, "programs.json");
+
+        if (File.Exists(filePath))
+        {
+            var json = await File.ReadAllTextAsync(filePath);
+            result = JsonSerializer.Deserialize<List<Program>>(json);
+        }
+        else
+        {
+            result = new List<Program>();
+        }
+        return result;
+    }
+
+    async Task SaveProgramsToFile(List<Program> programs)
+    {
+        var appDataFolder = Path.Combine(Directory.GetCurrentDirectory(), "App_Data");
+        Directory.CreateDirectory(appDataFolder);
+        var filePath = Path.Combine(appDataFolder, "programs.json");
+
+        var json = JsonSerializer.Serialize(programs);
+        await File.WriteAllTextAsync(filePath, json);
+    }
+
+    private void RemoveProgram(Program program)
+    {
+        programs.Remove(program);
+        SaveProgramsToFile(programs);
+    }
+
+    private async Task UploadFile(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file != null)
+        {
+            var fileName = file.Name;
+            var fileSize = file.Size;
+
+            var appDataFolder = Path.Combine(Directory.GetCurrentDirectory(), "App_Data");
+            var filePath = Path.Combine(appDataFolder, fileName);
+
+            using (var stream = new FileStream(filePath, FileMode.Create))
+            {
+                await file.OpenReadStream().CopyToAsync(stream);
+            }
+
+            var newProgram = new Program(fileName, $"File Size: {fileSize} bytes");
+            programs.Add(newProgram);
+            await SaveProgramsToFile(programs);
+        }
+    }
+
+    public class Program
+    {
+        public string Name { get; set; }
+        public string Description { get; set; }
+
+        public Program(string name, string description)
+        {
+            Name = name;
+            Description = description;
+        }
+    }
+}
